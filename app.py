@@ -67,7 +67,7 @@ min_accuracy = st.sidebar.slider("Min Soglia Sicurezza (%)", 20, 70, 40)
 @st.cache_data(ttl=30)
 def scarica_dati_binance(simbolo, timeframe, limite):
     try:
-        exchange = ccxt.binance()
+        exchange = ccxt.kraken()
         ohlcv = exchange.fetch_ohlcv(simbolo, timeframe=timeframe, limit=limite)
         
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])

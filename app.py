@@ -1,4 +1,15 @@
 import streamlit as st
+from PIL import Image
+
+# Carica l'immagine del logo
+logo = Image.open("logo.png")
+
+st.set_page_config(
+    page_title="Trading App",
+    page_icon=logo,
+    layout="wide"
+)
+
 import ccxt
 import pandas as pd
 import numpy as np
@@ -6,11 +17,6 @@ import plotly.graph_objects as go
 import requests
 from numpy import where
 
-# 1. Configurazione pagina
-st.set_page_config(
-    page_title="Trading App",
-    page_icon="logo.png"
-)
 
 # 2. Sidebar per l'autonomia dell'utente
 st.sidebar.header("Impostazioni Telegram")

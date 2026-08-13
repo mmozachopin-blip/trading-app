@@ -1,4 +1,3 @@
-
 import streamlit as st
 import ccxt
 import pandas as pd
@@ -7,39 +6,37 @@ import plotly.graph_objects as go
 import requests
 from numpy import where
 
-# 1. Questa DEVE essere la prima istruzione Streamlit
+# 1. Configurazione pagina
 st.set_page_config(
     page_title="Trading App",
     page_icon="logo.png"
 )
 
-# 2. Subito dopo metti i comandi della sidebar
+# 2. Sidebar per l'autonomia dell'utente
 st.sidebar.header("Impostazioni Telegram")
-
 st.sidebar.text_input(
-    "Telegram Bot Token", 
-    type="password", 
+    "Telegram Bot Token",
+    type="password",
     key="telegram_token"
 )
-
 st.sidebar.text_input(
-    "Telegram Chat ID", 
+    "Telegram Chat ID",
     key="chat_id"
 )
 
+# 3. Funzione Telegram che usa i dati della sessione
 def invia_telegram(messaggio):
     token = st.session_state.get("telegram_token", "")
     c_id = st.session_state.get("chat_id", "")
     
     if not token or not c_id:
         return False
-    
+        
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": c_id,
         "text": messaggio
     }
-    
     try:
         response = requests.post(url, json=payload)
         return response.ok

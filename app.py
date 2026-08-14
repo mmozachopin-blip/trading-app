@@ -1,5 +1,68 @@
-# --- GESTIONE INVIO TELEGRAM IN BASE ALLE SOGLIE ---
-# (La parte precedente del tuo codice rimane invariata)
+import streamlit as st
+from PIL import Image
+
+# Carica l'immagine del logo
+logo = Image.open("logo.png")
+
+st.set_page_config(
+    page_title="Trading App",
+    page_icon=logo,
+    layout="wide"
+)
+
+import ccxt
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+import requests
+from numpy import where
+
+# 2. Sidebar per l'autonomia dell'utente
+st.sidebar.header("Impostazioni Telegram")
+st.sidebar.text_input(
+    "Telegram Bot Token",
+    type="password",
+    key="telegram_token"
+)
+st.sidebar.text_input(
+    "Telegram Chat ID",
+    key="chat_id"
+)
+
+# 3. Funzione Telegram che usa i dati della sessione
+def invia_telegram(messaggio):
+    token = st.session_state.get("telegram_token", "")
+    c_id = st.session_state.get("chat_id", "")
+   
+    if not token or not c_id:
+        return False
+       
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": c_id,
+        "text": messaggio
+    }
+    try:
+        response = requests.post(url, json=payload)
+        return response.ok
+    except Exception as e:
+        return False
+
+# Pannello di controllo nella barra laterale
+st.sidebar.header("Impostazioni")
+simbolo = st.sidebar.selectbox("Simbolo", ["BTC/USDT", "ETH/USDT", "SOL/USDT", "XRP/USDT","BNB/USDT","ADA/USDT"], index=0)
+timeframe = st.sidebar.selectbox("Timeframe", ["15m", "30m", "1h", "4h", "1d"], index=0)
+limite = st.sidebar.slider("Numero di candele", 50, 1000, 500)
+
+st.sidebar.markdown("---")
+st.sidebar.header("Gestione Rischio (SL / TP)")
+pct_stop_loss = st.sidebar.slider("Stop Loss (%)", 0.01, 5.0, 0.5, 0.01)
+pct_take_profit = st.sidebar.slider("Take Profit (%)", 0.1, 10.0, 1.0, 0.1)
+
+st.sidebar.markdown("---")
+st.sidebar.header("Soglie di Filtro Notifica Telegram")
+min_confidenza = st.sidebar.slider("Min Probabilità MC (%)", 10, 90, 30)
+min_accuracy = st.sidebar.slider("Min Soglia Sicurezza (%)", 20, 70, 40)
 
 # Funzione per scaricare i dati in tempo reale da Binance
 @st.cache_data(ttl=30)
@@ -190,8 +253,5 @@ def esegui_monitoraggio():
     else:
         st.warning("Caricamento dei dati dal server in corso...")
 
-# AVVIO DELLA FUNZIONE (Metti questa riga alla fine di tutto)
-esegui_monitoraggio()
-
-# AVVIO DELLA FUNZIONE (Metti questa riga alla fine di tutto)
+# Avvio della funzione di monitoraggio automatico
 esegui_monitoraggio()

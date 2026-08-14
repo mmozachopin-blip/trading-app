@@ -192,3 +192,6 @@ def esegui_monitoraggio():
 
 # AVVIO DELLA FUNZIONE (Metti questa riga alla fine di tutto)
 esegui_monitoraggio()
+
+# AVVIO DELLA FUNZIONE (Metti questa riga alla fine di tutto)
+esegui_monitoraggio()

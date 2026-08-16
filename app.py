@@ -1,8 +1,6 @@
 import streamlit as st
 from PIL import Image
 
-# Carica l'immagine del logo
-logo = Image.open("logo.png")
 
 st.set_page_config(
     page_title="Trading App",

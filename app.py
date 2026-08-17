@@ -51,9 +51,9 @@ timeframe = st.sidebar.selectbox("Timeframe", ["15m", "30m", "1h", "4h", "1d"], 
 limite = st.sidebar.slider("Numero di candele", 50, 1000, 500)
 
 st.sidebar.markdown("---")
-st.sidebar.header("Gestione Rischio (SL / TP)")
-pct_stop_loss = st.sidebar.slider("Stop Loss (%)", 0.01, 5.0, 0.5, 0.01)
-pct_take_profit = st.sidebar.slider("Take Profit (%)", 0.1, 10.0, 1.0, 0.1)
+st.sidebar.header("Gestione Rischio Dinamica (ATR)")
+atr_mult_sl = st.sidebar.slider("Moltiplicatore Stop Loss (ATR)", 0.5, 3.0, 1.0, 0.1)
+atr_mult_tp = st.sidebar.slider("Moltiplicatore Take Profit (ATR)", 0.5, 5.0, 2.0, 0.1)
 
 st.sidebar.markdown("---")
 st.sidebar.header("Soglie di Filtro Notifica Telegram")
@@ -93,13 +93,15 @@ def esegui_monitoraggio():
         rs = guadagno / (perdita + 1e-9)
         df_mercato['RSI'] = 100 - (100 / (1 + rs))
        
+        # ATR (Average True Range) 14 periodi
+        high_low = df_mercato['high'] - df_mercato['low']
+        high_close = (df_mercato['high'] - df_mercato['close'].shift()).abs()
+        low_close = (df_mercato['low'] - df_mercato['close'].shift()).abs()
+        true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        df_mercato['ATR'] = true_range.rolling(window=14).mean().fillna(true_range.mean())
+
         # ADX Reale
-        tr = pd.concat([
-            df_mercato['high'] - df_mercato['low'],
-            (df_mercato['high'] - df_mercato['close'].shift()).abs(),
-            (df_mercato['low'] - df_mercato['close'].shift()).abs()
-        ], axis=1).max(axis=1).rolling(14).mean()
-       
+        tr = true_range.rolling(14).mean()
         up_move = df_mercato['high'] - df_mercato['high'].shift(1)
         down_move = df_mercato['low'].shift(1) - df_mercato['low']
        
@@ -116,6 +118,7 @@ def esegui_monitoraggio():
         ema_200_attuale = df_mercato['EMA_200'].iloc[-1]
         rsi_attuale = df_mercato['RSI'].iloc[-1]
         adx_attuale = df_mercato['ADX'].iloc[-1]
+        atr_attuale = df_mercato['ATR'].iloc[-1]
        
         trend_ribassista = prezzo_attuale < ema_200_attuale
        
@@ -130,7 +133,15 @@ def esegui_monitoraggio():
             colore_testo = "#00FF7F"
             regime_regola = "Trend Rialzista ➔ Cerca solo BUY"
 
-        def esegui_monte_carlo(prezzo_corrente, df, tp_pct, sl_pct, direzione, num_simulazioni=500, passi_futuri=50):
+        # Calcolo dei livelli operativi basati sull'ATR
+        if segnale_ml == "BUY":
+            valore_sl = prezzo_attuale - (atr_attuale * atr_mult_sl)
+            valore_tp = prezzo_attuale + (atr_attuale * atr_mult_tp)
+        else:
+            valore_sl = prezzo_attuale + (atr_attuale * atr_mult_sl)
+            valore_tp = prezzo_attuale - (atr_attuale * atr_mult_tp)
+
+        def esegui_monte_carlo(prezzo_corrente, df, tp_target, sl_target, direzione, num_simulazioni=500, passi_futuri=50):
             ritorni = df['close'].pct_change().dropna()
             volatilita = ritorni.std()
             drift = ritorni.mean()
@@ -140,12 +151,8 @@ def esegui_monitoraggio():
             tassi_rendimento = drift + volatilita * random_shocks
             percorsi = prezzo_corrente * np.cumprod(1 + tassi_rendimento, axis=1)
            
-            if direzione == "BUY":
-                tp_prezzo = prezzo_corrente * (1 + tp_pct / 100)
-                sl_prezzo = prezzo_corrente * (1 - sl_pct / 100)
-            else:
-                tp_prezzo = prezzo_corrente * (1 - tp_pct / 100)
-                sl_prezzo = prezzo_corrente * (1 + sl_pct / 100)
+            tp_prezzo = tp_target
+            sl_prezzo = sl_target
                
             successi = 0
             for i in range(num_simulazioni):
@@ -176,17 +183,10 @@ def esegui_monitoraggio():
         confidenza_ml, accuracy_reale = esegui_monte_carlo(
             prezzo_corrente=prezzo_attuale,
             df=df_mercato,
-            tp_pct=pct_take_profit,
-            sl_pct=pct_stop_loss,
+            tp_target=valore_tp,
+            sl_target=valore_sl,
             direzione=segnale_ml
         )
-
-        if segnale_ml == "BUY":
-            valore_sl = prezzo_attuale * (1 - pct_stop_loss / 100)
-            valore_tp = prezzo_attuale * (1 + pct_take_profit / 100)
-        else:
-            valore_sl = prezzo_attuale * (1 + pct_stop_loss / 100)
-            valore_tp = prezzo_attuale * (1 - pct_take_profit / 100)
 
         st.markdown(f"## Trading Monitor & Monte Carlo Simulation: {simbolo} ({timeframe})")
         st.markdown("---")
@@ -207,7 +207,7 @@ def esegui_monitoraggio():
             st.markdown(f"**Indice di Affidabilità**\n\n### <span style='color: #32CD32;'>{accuracy_reale:.1f}%</span>", unsafe_allow_html=True)
 
         regime_testo = f"Trend Forte (ADX: {adx_attuale:.1f})" if adx_attuale > 25 else f"Mercato Laterale (ADX: {adx_attuale:.1f})"
-        st.markdown(f"**Forza Trend (ADX):** {regime_testo} | **Livelli operativi ->** Stop Loss: `${valore_sl:,.2f}` | Take Profit: `${valore_tp:,.2f}`")
+        st.markdown(f"**Forza Trend (ADX):** {regime_testo} | **ATR:** `{atr_attuale:.2f}` | **Livelli operativi ->** Stop Loss: `${valore_sl:,.2f}` | Take Profit: `${valore_tp:,.2f}`")
         st.markdown("---")
 
         if confidenza_ml >= min_confidenza and accuracy_reale >= min_accuracy:
@@ -234,8 +234,8 @@ def esegui_monitoraggio():
         fig.add_trace(go.Scatter(x=df_mercato.index, y=df_mercato['SMA_20'], mode='lines', name='SMA 20', line=dict(color='sandybrown', width=1.2)))
         fig.add_trace(go.Scatter(x=df_mercato.index, y=df_mercato['EMA_200'], mode='lines', name='EMA 200', line=dict(color='dodgerblue', width=1.5)))
 
-        fig.add_hline(y=valore_sl, line_dash="dash", line_color="red", annotation_text=f"Stop Loss ({pct_stop_loss}%)", annotation_position="bottom right")
-        fig.add_hline(y=valore_tp, line_dash="dash", line_color="green", annotation_text=f"Take Profit ({pct_take_profit}%)", annotation_position="top right")
+        fig.add_hline(y=valore_sl, line_dash="dash", line_color="red", annotation_text=f"Stop Loss (ATR x{atr_mult_sl})", annotation_position="bottom right")
+        fig.add_hline(y=valore_tp, line_dash="dash", line_color="green", annotation_text=f"Take Profit (ATR x{atr_mult_tp})", annotation_position="top right")
 
         fig.update_layout(
             template="plotly_dark",
